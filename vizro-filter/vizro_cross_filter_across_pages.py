@@ -4,99 +4,43 @@ This example demonstrates Vizro best practices including:
 - Custom charts using @capture("graph") decorator
 - Data registration with data_manager for efficient data handling
 - Cross-filtering across pages using data_manager
+- Cross-page filtering using Dash callbacks
+- Modular component architecture for maintainability
 """
 
-import pandas as pd
-import plotly.express as px
+from dash import Input, Output, callback, dcc, html
 from vizro import Vizro
 from vizro.managers import data_manager
 from vizro.models import Dashboard, Page, Graph
-from vizro.models.types import capture
-from vizro.plotly.data import gapminder
+
+from components import (
+    gapminder_bar_chart,
+    gapminder_line_chart,
+    gapminder_scatter_chart,
+    load_gapminder_data,
+    create_date_range_parameters,
+)
+
 
 # Register the gapminder dataset with data_manager for lazy loading
-data_manager["gapminder"] = gapminder
+data_manager["gapminder"] = load_gapminder_data
 
 
-@capture("graph")
-def gapminder_line_chart(data_frame: pd.DataFrame):
-    """Create a Gapminder line chart showing GDP trends.
+# ===== Dashboard Configuration =====
 
-    Args:
-        data_frame: The gapminder dataset from data_manager
+# Create separate year range parameters for each page
+# Each parameter targets only the components on its respective page
+economic_year_range_params = create_date_range_parameters(
+    prefix="economic_",
+    data_frame="gapminder",
+    target_components=["line_chart"]
+)
 
-    Returns:
-        Plotly express line chart figure
-    """
-    # Filter for a few countries to make the chart readable
-    countries = ["United States", "China", "India", "Germany", "Brazil"]
-    df_filtered = data_frame[data_frame["country"].isin(countries)]
-
-    fig = px.line(
-        df_filtered,
-        x="year",
-        y="gdpPercap",
-        color="country",
-        title="GDP per Capita Over Time (Selected Countries)"
-    )
-    return fig
-
-
-@capture("graph")
-def gapminder_scatter_chart(data_frame: pd.DataFrame):
-    """Create a Gapminder scatter plot for the latest year.
-
-    Args:
-        data_frame: The gapminder dataset from data_manager
-
-    Returns:
-        Plotly express scatter chart figure
-    """
-    # Use the most recent year
-    latest_year = data_frame['year'].max()
-    df_latest = data_frame[data_frame['year'] == latest_year]
-
-    fig = px.scatter(
-        df_latest,
-        x="gdpPercap",
-        y="lifeExp",
-        size="pop",
-        color="continent",
-        hover_name="country",
-        title=f"Life Expectancy vs GDP per Capita ({latest_year})",
-        size_max=60
-    )
-    fig.update_layout(xaxis_type="log")
-    return fig
-
-
-@capture("graph")
-def gapminder_bar_chart(data_frame: pd.DataFrame):
-    """Create a bar chart showing population by continent.
-
-    Args:
-        data_frame: The gapminder dataset from data_manager
-
-    Returns:
-        Plotly express bar chart figure
-    """
-    # Use the most recent year
-    latest_year = data_frame['year'].max()
-    df_latest = data_frame[data_frame['year'] == latest_year]
-
-    # Sum population by continent
-    continent_pop = df_latest.groupby('continent')['pop'].sum().reset_index()
-
-    fig = px.bar(
-        continent_pop,
-        x="continent",
-        y="pop",
-        title=f"Total Population by Continent ({latest_year})",
-        color="continent"
-    )
-    fig.update_layout(yaxis_title="Population")
-    return fig
-
+global_year_range_params = create_date_range_parameters(
+    prefix="global_",
+    data_frame="gapminder",
+    target_components=["scatter_chart", "bar_chart"]
+)
 
 # Dashboard configuration
 dashboard = Dashboard(
@@ -107,31 +51,54 @@ dashboard = Dashboard(
             components=[
                 Graph(
                     id="line_chart",
-                    figure=gapminder_line_chart,
+                    figure=gapminder_line_chart(data_frame="gapminder"),
                 )
-            ]
+            ],
+            controls=economic_year_range_params,
         ),
         Page(
             title="Global Analysis",
             components=[
                 Graph(
                     id="scatter_chart",
-                    figure=gapminder_scatter_chart,
+                    figure=gapminder_scatter_chart(data_frame="gapminder"),
                 ),
                 Graph(
                     id="bar_chart",
-                    figure=gapminder_bar_chart,
+                    figure=gapminder_bar_chart(data_frame="gapminder"),
                 )
-            ]
+            ],
+            controls=global_year_range_params,
         )
     ]
 )
 
 
 def main():
-    """Run the Vizro dashboard."""
-    # Build and run the dashboard
+    """Run the Vizro dashboard with dcc.Store for cross-page state synchronization."""
+    # Build the dashboard
     app = Vizro().build(dashboard)
+
+    # Add dcc.Store to the app layout for syncing year range across pages
+    # This store persists the selected year range and syncs it between pages
+    original_layout = app.dash.layout
+
+    @callback(Output("year_range_store", "data"), Input("year_range_store", "data"))
+    def initialize_store(data):
+        """Initialize the store with default values if needed."""
+        if data is None:
+            df = data_manager["gapminder"].load()
+            return [int(df["year"].min()), int(df["year"].max())]
+        return data
+
+    def create_layout():
+        """Wrap the original layout with dcc.Store for state management."""
+        return html.Div([
+            dcc.Store(id="year_range_store", storage_type="session"),
+            original_layout() if callable(original_layout) else original_layout
+        ])
+
+    app.dash.layout = create_layout
     app.run(debug=True, host="127.0.0.1", port=8050)
 
 
