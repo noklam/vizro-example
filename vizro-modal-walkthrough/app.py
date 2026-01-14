@@ -20,27 +20,22 @@ WALKTHROUGH_STEPS = [
     {
         "id": "modal-welcome",
         "title": "Welcome to Your Dashboard!",
-        "content": "This walkthrough highlights navigation, charts, and filters. Click 'Next' to continue or 'Skip' to close the tour.",
+        "content": "This walkthrough highlights navigation and charts. Click 'Next' to continue or 'Skip' to close the tour.",
     },
     {
-        "id": "modal-nav",
-        "title": "Multi-page Navigation",
-        "content": "Use the top navigation bar to switch between Overview and Deep Dive pages. The filter panel applies across pages.",
+        "id": "modal-nav-overview",
+        "title": "Navigation: Overview",
+        "content": "Use the page selector to open the Overview page. We'll highlight it here.",
+    },
+    {
+        "id": "modal-nav-deep",
+        "title": "Navigation: Deep Dive",
+        "content": "Now select the Deep Dive page to explore detailed views.",
     },
     {
         "id": "modal-charts",
         "title": "Interactive Charts",
         "content": "Hover to see point details, drag to zoom, and double-click to reset. Both pages use the same Iris dataset so filters stay in sync.",
-    },
-    {
-        "id": "modal-filters",
-        "title": "Filtering Data",
-        "content": "Use the species filter to narrow the view. Charts on whichever page you're on will update automatically.",
-    },
-    {
-        "id": "modal-help",
-        "title": "Getting Help",
-        "content": "Click the floating '?' button anytime to reopen this tour. Feel free to skip or finish when you're done.",
     },
 ]
 
@@ -84,7 +79,10 @@ class WalkthroughModalStack(vm.VizroBaseModel):
                 id=step["id"],
                 title=step["title"],
                 centered=False,
-                overlayProps={"opacity": 0.25},
+                withOverlay=False,  # keep background interactive while tour card is open
+                closeOnClickOutside=False,
+                trapFocus=False,
+                overlayProps={"opacity": 0},
                 styles={
                     "content": {
                         "position": "fixed",
@@ -148,14 +146,36 @@ class WalkthroughModalStack(vm.VizroBaseModel):
                     position="right",
                     withinPortal=False,
                 ),
-                dmc.Tooltip(
-                    id="tour-tip-filters",
-                    label="Use the species filter to slice the dataset; changes apply across pages.",
-                    target="species-filter",
-                    opened=False,
-                    withArrow=True,
-                    position="right",
-                    withinPortal=False,
+                # Simple highlight boxes for nav items
+                html.Div(
+                    id="highlight-nav-overview",
+                    style={
+                        "position": "fixed",
+                        "left": "14px",
+                        "top": "72px",
+                        "width": "140px",
+                        "height": "36px",
+                        "border": "2px solid #f2c94c",
+                        "borderRadius": "8px",
+                        "boxShadow": "0 0 12px rgba(242,201,76,0.7)",
+                        "pointerEvents": "none",
+                        "display": "none",
+                    },
+                ),
+                html.Div(
+                    id="highlight-nav-deep",
+                    style={
+                        "position": "fixed",
+                        "left": "14px",
+                        "top": "114px",
+                        "width": "140px",
+                        "height": "36px",
+                        "border": "2px solid #f2c94c",
+                        "borderRadius": "8px",
+                        "boxShadow": "0 0 12px rgba(242,201,76,0.7)",
+                        "pointerEvents": "none",
+                        "display": "none",
+                    },
                 ),
             ]
         )
@@ -180,7 +200,7 @@ def open_walkthrough(n_clicks):
     return no_update
 
 
-# Navigation: Welcome -> Nav
+# Navigation: Welcome -> Nav (Overview)
 @callback(
     Output("walkthrough-modal-stack", "open", allow_duplicate=True),
     Output("walkthrough-modal-stack", "close", allow_duplicate=True),
@@ -188,41 +208,69 @@ def open_walkthrough(n_clicks):
     prevent_initial_call=True,
 )
 def welcome_to_nav(n_clicks):
-    """Navigate from welcome to navigation modal."""
+    """Navigate from welcome to navigation (overview) modal."""
     if n_clicks:
-        return "modal-nav", "modal-welcome"
+        return "modal-nav-overview", "modal-welcome"
     return no_update, no_update
 
 
-# Navigation: Nav -> Welcome (back)
+# Navigation: Nav (Overview) -> Welcome (back)
 @callback(
     Output("walkthrough-modal-stack", "open", allow_duplicate=True),
     Output("walkthrough-modal-stack", "close", allow_duplicate=True),
-    Input("btn-modal-nav-back", "n_clicks"),
+    Input("btn-modal-nav-overview-back", "n_clicks"),
     prevent_initial_call=True,
 )
 def nav_back_to_welcome(n_clicks):
-    """Navigate back from navigation to welcome modal."""
+    """Navigate back from navigation overview to welcome modal."""
     if n_clicks:
-        return "modal-welcome", "modal-nav"
+        return "modal-welcome", "modal-nav-overview"
     return no_update, no_update
 
 
-# Navigation: Nav -> Charts
+# Navigation: Nav (Overview) -> Nav (Deep)
 @callback(
     Output("walkthrough-modal-stack", "open", allow_duplicate=True),
     Output("walkthrough-modal-stack", "close", allow_duplicate=True),
-    Input("btn-modal-nav-next", "n_clicks"),
+    Input("btn-modal-nav-overview-next", "n_clicks"),
     prevent_initial_call=True,
 )
 def nav_to_charts(n_clicks):
-    """Navigate from navigation to charts modal."""
+    """Navigate from navigation overview to navigation deep modal."""
     if n_clicks:
-        return "modal-charts", "modal-nav"
+        return "modal-nav-deep", "modal-nav-overview"
     return no_update, no_update
 
 
-# Navigation: Charts -> Nav (back)
+# Navigation: Nav (Deep) -> Nav (Overview) (back)
+@callback(
+    Output("walkthrough-modal-stack", "open", allow_duplicate=True),
+    Output("walkthrough-modal-stack", "close", allow_duplicate=True),
+    Input("btn-modal-nav-deep-back", "n_clicks"),
+    prevent_initial_call=True,
+)
+def nav_deep_back_to_nav_overview(n_clicks):
+    """Navigate back from navigation deep to navigation overview modal."""
+    if n_clicks:
+        return "modal-nav-overview", "modal-nav-deep"
+    return no_update, no_update
+
+
+# Navigation: Nav (Deep) -> Charts
+@callback(
+    Output("walkthrough-modal-stack", "open", allow_duplicate=True),
+    Output("walkthrough-modal-stack", "close", allow_duplicate=True),
+    Input("btn-modal-nav-deep-next", "n_clicks"),
+    prevent_initial_call=True,
+)
+def nav_deep_to_charts(n_clicks):
+    """Navigate from navigation deep to charts modal."""
+    if n_clicks:
+        return "modal-charts", "modal-nav-deep"
+    return no_update, no_update
+
+
+# Navigation: Charts -> Nav (Deep) (back)
 @callback(
     Output("walkthrough-modal-stack", "open", allow_duplicate=True),
     Output("walkthrough-modal-stack", "close", allow_duplicate=True),
@@ -230,65 +278,9 @@ def nav_to_charts(n_clicks):
     prevent_initial_call=True,
 )
 def charts_back_to_nav(n_clicks):
-    """Navigate back from charts to navigation modal."""
+    """Navigate back from charts to navigation deep modal."""
     if n_clicks:
-        return "modal-nav", "modal-charts"
-    return no_update, no_update
-
-
-# Navigation: Charts -> Filters
-@callback(
-    Output("walkthrough-modal-stack", "open", allow_duplicate=True),
-    Output("walkthrough-modal-stack", "close", allow_duplicate=True),
-    Input("btn-modal-charts-next", "n_clicks"),
-    prevent_initial_call=True,
-)
-def charts_to_filters(n_clicks):
-    """Navigate from charts to filters modal."""
-    if n_clicks:
-        return "modal-filters", "modal-charts"
-    return no_update, no_update
-
-
-# Navigation: Filters -> Charts (back)
-@callback(
-    Output("walkthrough-modal-stack", "open", allow_duplicate=True),
-    Output("walkthrough-modal-stack", "close", allow_duplicate=True),
-    Input("btn-modal-filters-back", "n_clicks"),
-    prevent_initial_call=True,
-)
-def filters_back_to_charts(n_clicks):
-    """Navigate back from filters to charts modal."""
-    if n_clicks:
-        return "modal-charts", "modal-filters"
-    return no_update, no_update
-
-
-# Navigation: Filters -> Help
-@callback(
-    Output("walkthrough-modal-stack", "open", allow_duplicate=True),
-    Output("walkthrough-modal-stack", "close", allow_duplicate=True),
-    Input("btn-modal-filters-next", "n_clicks"),
-    prevent_initial_call=True,
-)
-def filters_to_help(n_clicks):
-    """Navigate from filters to help modal."""
-    if n_clicks:
-        return "modal-help", "modal-filters"
-    return no_update, no_update
-
-
-# Navigation: Help -> Filters (back)
-@callback(
-    Output("walkthrough-modal-stack", "open", allow_duplicate=True),
-    Output("walkthrough-modal-stack", "close", allow_duplicate=True),
-    Input("btn-modal-help-back", "n_clicks"),
-    prevent_initial_call=True,
-)
-def help_back_to_filters(n_clicks):
-    """Navigate back from help to filters modal."""
-    if n_clicks:
-        return "modal-filters", "modal-help"
+        return "modal-nav-deep", "modal-charts"
     return no_update, no_update
 
 
@@ -310,13 +302,41 @@ def close_all_modals(skip_clicks, finish_clicks):
 # Sync tour popovers with the active walkthrough step
 @callback(
     Output("tour-tip-charts", "opened"),
-    Output("tour-tip-filters", "opened"),
+    Output("highlight-nav-overview", "style"),
+    Output("highlight-nav-deep", "style"),
     Input("walkthrough-modal-stack", "open"),
 )
 def toggle_popovers(active_step):
     show_charts = active_step == "modal-charts"
-    show_filters = active_step == "modal-filters"
-    return show_charts, show_filters
+    base_over = {
+        "position": "fixed",
+        "left": "14px",
+        "top": "72px",
+        "width": "140px",
+        "height": "36px",
+        "border": "2px solid #f2c94c",
+        "borderRadius": "8px",
+        "boxShadow": "0 0 12px rgba(242,201,76,0.7)",
+        "pointerEvents": "none",
+        "display": "none",
+    }
+    base_deep = {
+        "position": "fixed",
+        "left": "14px",
+        "top": "114px",
+        "width": "140px",
+        "height": "36px",
+        "border": "2px solid #f2c94c",
+        "borderRadius": "8px",
+        "boxShadow": "0 0 12px rgba(242,201,76,0.7)",
+        "pointerEvents": "none",
+        "display": "none",
+    }
+
+    over_style = {**base_over, "display": "block"} if active_step == "modal-nav-overview" else base_over
+    deep_style = {**base_deep, "display": "block"} if active_step == "modal-nav-deep" else base_deep
+
+    return show_charts, over_style, deep_style
 
 
 # --- Dashboard Setup (multi-page) ---
